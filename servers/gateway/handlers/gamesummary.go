@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+// GameSummary represents the properties for a game
 type GameSummary struct {
 	GameURL     string `json:"gameUrl,omitempty"`
 	Title       string `json:"title,omitempty"`
@@ -20,12 +21,17 @@ type GameSummary struct {
 	ImageURL    string `json:"imageUrl,omitempty"`
 }
 
+// storage of all the games from the website
 type GameList struct {
 	list []*GameSummary
 }
 
 var gl = &GameList{}
 
+// Handles requests for the game summary API.
+// This adds a cookie when the client first makes a request,
+// then responds with a JSON-encoded Game Summary struct containing
+// the game summary data.
 func GameSummaryHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 
@@ -57,6 +63,8 @@ func GameSummaryHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(extract)
 }
 
+// Extracts the games available on in the gallery and saves it
+// to a slice and returns it.
 func extractGames() []*GameSummary {
 	var gameSlice []*GameSummary
 
@@ -81,6 +89,8 @@ func extractGames() []*GameSummary {
 	return gameSlice
 }
 
+// Generates a random game in the game slice.
+// Deletes from slice to prevent user from seeing the same game.
 func (games *GameList) randomGame() (*GameSummary, error) {
 	rand.Seed(time.Now().Unix())
 	if len(games.list) == 0 {
