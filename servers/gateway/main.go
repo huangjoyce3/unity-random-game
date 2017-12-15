@@ -29,5 +29,5 @@ func main() {
 	corsHandler := handlers.NewCORSHandler(mux)
 
 	fmt.Printf("server is listening at http://%s\n", addr)
-	log.Fatal(http.ListenAndServe(addr, corsHandler))
+	log.Fatal(http.ListenAndServeTLS(addr, tlscert, tlskey, corsHandler))
 }
