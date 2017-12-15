@@ -3,19 +3,13 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
-	//"golang.org/x/net/html"
 	"github.com/PuerkitoBio/goquery"
-	"io"
-	"net/http"
-	//"strconv"
 	"log"
-	"strings"
+	"math/rand"
+	"net/http"
+	"strconv"
+	"time"
 )
-
-const unityURL = "https://unity3d.com/showcase/gallery"
-
-var Games []*GameSummary
 
 type GameSummary struct {
 	GameURL     string `json:"gameUrl,omitempty"`
@@ -26,51 +20,52 @@ type GameSummary struct {
 	ImageURL    string `json:"imageUrl,omitempty"`
 }
 
+type GameList struct {
+	list []*GameSummary
+}
+
+var gl = &GameList{}
+
 func GameSummaryHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add(headerContentType, contentTypeJSON)
-	w.Header().Add(headerAccessControlAllowOrigin, "*")
+	w.Header().Add("Content-Type", "application/json")
 
-	htmlStream, err := fetchHTML(unityURL)
-	if err != nil {
-		http.Error(w, "error fetching html", http.StatusBadRequest)
-		return
+	_, err := r.Cookie("user")
+	cookie := &http.Cookie{
+		Name:    "user",
+		Expires: time.Now().AddDate(0, 0, 1),
+		Value:   strconv.FormatInt(time.Now().Unix(), 10),
 	}
-	extract, err := extractGames()
-	// extract, err := extractGames(unityURL, htmlStream)
+	http.SetCookie(w, cookie)
+
+	var extract *GameSummary
 	if err != nil {
-		http.Error(w, "error extracting game summary", http.StatusBadRequest)
-		return
+		// get all games for new user
+		gl.list = extractGames()
+
+		extract, err = gl.randomGame()
+		if err != nil {
+			http.Error(w, "error getting game information", http.StatusBadRequest)
+			return
+		}
 	}
 
-	defer htmlStream.Close()
-
+	extract, err = gl.randomGame()
+	if err != nil {
+		http.Error(w, "You viewed all the games! Refresh to start over.", http.StatusBadRequest)
+		gl.list = extractGames()
+	}
 	json.NewEncoder(w).Encode(extract)
 }
 
-func fetchHTML(pageURL string) (io.ReadCloser, error) {
-	resp, err := http.Get(pageURL)
-	if err != nil {
-		return nil, errors.New("error fecting URL")
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("response status code >= 400")
-	}
-
-	contentType := resp.Header.Get("Content-Type")
-	if !strings.HasPrefix(contentType, "text/html") {
-		return nil, errors.New("response content type was not text/html")
-	}
-	return resp.Body, nil
-}
-func extractGames() ([]*GameSummary, error) {
+func extractGames() []*GameSummary {
 	var gameSlice []*GameSummary
 
 	doc, err := goquery.NewDocument("https://unity3d.com/showcase/gallery")
 	if err != nil {
 		log.Fatal(err)
 	}
-	var count = 0
+
+	// scrape HTML for video game information
 	doc.Find(".game").Each(func(index int, item *goquery.Selection) {
 		game := &GameSummary{}
 		game.Title = item.Find(".title").Text()
@@ -81,9 +76,24 @@ func extractGames() ([]*GameSummary, error) {
 		game.Genre = item.Find(".genres").Text()
 		image, _ := item.Find(".ic").Attr("src")
 		game.ImageURL = image
-		count++
 		gameSlice = append(gameSlice, game)
 	})
-	fmt.Println(len(gameSlice))
-	return gameSlice, nil
+	return gameSlice
+}
+
+func (games *GameList) randomGame() (*GameSummary, error) {
+	rand.Seed(time.Now().Unix())
+	if len(games.list) == 0 {
+		return nil, errors.New("Out of games")
+	}
+	// random number to choose game
+	n := rand.Int() % len(games.list)
+	tempGame := games.list[n]
+
+	//delete game from slice by swapping to end and
+	//return n-1 elements
+	games.list[len(games.list)-1], games.list[n] = games.list[n], games.list[len(games.list)-1]
+	games.list = games.list[:len(games.list)-1]
+
+	return tempGame, nil
 }
